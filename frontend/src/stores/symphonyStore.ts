@@ -1,119 +1,223 @@
 /**
- * @file symphonyStore.ts
- * @description Gerenciamento de estado global da aplicação Symphony of Connection
- * @version 1.0.0
- * @author Symphony of Connection Team
+ * Store Zustand para gerenciamento de estado da Symphony of Connection
+ * Integrado com WebSocket para colaboração em tempo real
+ * @module stores/symphonyStore
  */
 
-import { create } from 'zustand'
+import { create } from 'zustand';
+import { socketService, SymphonyState, UserState, EmotionalVector } from '../services/socketService';
+
+// Interface estendida para compatibilidade com código existente
+interface SymphonyStore {
+  // Estado da sinfonia colaborativa
+  symphonyState: SymphonyState | null;
+  
+  // Usuário atual
+  currentUser: UserState | null;
+  
+  // Estado de conexão
+  isConnected: boolean;
+
+  // Propriedades para compatibilidade com código legado
+  emotionalVector: EmotionalVector;
+  audioEnabled: boolean;
+  mousePosition: [number, number, number];
+  mouseIntensity: number;
+  
+  // Ações
+  setSymphonyState: (state: SymphonyState) => void;
+  setCurrentUser: (user: UserState) => void;
+  setConnected: (connected: boolean) => void;
+  
+  // Ações de conexão
+  connectToSymphony: () => void;
+  disconnectFromSymphony: () => void;
+  
+  // Ações de atualização
+  updateEmotionalVector: (emotionalVector: EmotionalVector) => void;
+  updatePosition: (position: [number, number, number]) => void;
+  
+  // Ações para compatibilidade
+  setAudioEnabled: (enabled: boolean) => void;
+  setMousePosition: (position: [number, number, number]) => void;
+  setMouseIntensity: (intensity: number) => void;
+  updateEmotion: (emotion: string, value: number) => void;
+  
+  // Utilidades
+  getOtherUsers: () => UserState[];
+  getConnectionStrength: () => number;
+}
+
+// Estado emocional padrão
+const defaultEmotionalVector: EmotionalVector = {
+  joy: 0.5,
+  excitement: 0.5,
+  calm: 0.5,
+  curiosity: 0.5,
+  intensity: 0.5,
+  fluidity: 0.5,
+  connection: 0.5
+};
 
 /**
- * @interface EmotionalVector
- * @description Representa o vetor emocional de 7 dimensões do usuário
- * @property {number} joy - Nível de alegria (0-1)
- * @property {number} excitement - Nível de excitação (0-1)
- * @property {number} calm - Nível de calma (0-1)
- * @property {number} curiosity - Nível de curiosidade (0-1)
- * @property {number} intensity - Intensidade emocional (0-1)
- * @property {number} fluidity - Fluidez do movimento (0-1)
- * @property {number} connection - Nível de conexão com outros (0-1)
+ * Store principal da aplicação
  */
-export interface EmotionalVector {
-  joy: number
-  excitement: number
-  calm: number
-  curiosity: number
-  intensity: number
-  fluidity: number
-  connection: number
-}
-
-export interface UserState {
-  id: string
-  emotionalVector: EmotionalVector
-  position: [number, number, number]
-  color: string
-  connected: boolean
-}
-
-export interface SymphonyState {
-  users: UserState[]
-  emotionalField: EmotionalVector
-  connectionStrength: number
-  audioIntensity: number
-}
-
-interface SymphonyStore {
-  // Estado emocional do usuário local
-  emotionalVector: EmotionalVector
-  setEmotionalVector: (vector: EmotionalVector) => void
-  updateEmotion: (emotion: keyof EmotionalVector, value: number) => void
-
-  // Estado da sinfonia
-  symphonyState: SymphonyState
-  setSymphonyState: (state: SymphonyState) => void
-
-  // Configurações
-  audioEnabled: boolean
-  setAudioEnabled: (enabled: boolean) => void
-
-  // Controles
-  mousePosition: [number, number]
-  setMousePosition: (position: [number, number]) => void
-  mouseIntensity: number
-  setMouseIntensity: (intensity: number) => void
-}
-
-export const useSymphonyStore = create<SymphonyStore>((set, get) => ({
-  // Estado emocional inicial
-  emotionalVector: {
-    joy: 0.5,
-    excitement: 0.3,
-    calm: 0.7,
-    curiosity: 0.6,
-    intensity: 0.4,
-    fluidity: 0.5,
-    connection: 0.2
-  },
-  
-  setEmotionalVector: (vector) => set({ emotionalVector: vector }),
-  
-  updateEmotion: (emotion, value) => {
-    const current = get().emotionalVector
+export const useSymphonyStore = create<SymphonyStore>((set, get) => {
+  // Configurar callbacks do serviço de socket
+  socketService.setSymphonyStateCallback((state: SymphonyState) => {
+    const currentUser = get().currentUser;
     set({ 
-      emotionalVector: {
-        ...current,
-        [emotion]: Math.max(0, Math.min(1, value))
+      symphonyState: state,
+      // Atualizar usuário atual se necessário
+      currentUser: currentUser ? state.users.find(u => u.id === currentUser.id) || currentUser : currentUser
+    });
+  });
+
+  socketService.setUserJoinedCallback((data: { user: UserState }) => {
+    const { symphonyState } = get();
+    if (symphonyState) {
+      set({
+        symphonyState: {
+          ...symphonyState,
+          users: [...symphonyState.users, data.user]
+        }
+      });
+    }
+  });
+
+  socketService.setUserLeftCallback((data: { userId: string }) => {
+    const { symphonyState } = get();
+    if (symphonyState) {
+      set({
+        symphonyState: {
+          ...symphonyState,
+          users: symphonyState.users.filter(u => u.id !== data.userId)
+        }
+      });
+    }
+  });
+
+  socketService.setSymphonyUpdateCallback((state: SymphonyState) => {
+    set({ symphonyState: state });
+  });
+
+  socketService.setUserPositionUpdateCallback((data: { userId: string; position: [number, number, number] }) => {
+    const { symphonyState } = get();
+    if (symphonyState) {
+      set({
+        symphonyState: {
+          ...symphonyState,
+          users: symphonyState.users.map(u => 
+            u.id === data.userId ? { ...u, position: data.position } : u
+          )
+        }
+      });
+    }
+  });
+
+  socketService.setConnectionChangeCallback((connected: boolean) => {
+    set({ isConnected: connected });
+    
+    if (connected) {
+      const socketId = socketService.getSocketId();
+      if (socketId) {
+        // Criar usuário atual baseado no socket ID
+        const currentUser: UserState = {
+          id: socketId,
+          emotionalVector: defaultEmotionalVector,
+          position: [0, 0, 0],
+          color: `hsl(${Math.floor(Math.random() * 360)}, 70%, 60%)`,
+          connected: true
+        };
+        set({ currentUser });
       }
-    })
-  },
-  
-  // Estado da sinfonia
-  symphonyState: {
-    users: [],
-    emotionalField: {
-      joy: 0.5,
-      excitement: 0.3,
-      calm: 0.7,
-      curiosity: 0.6,
-      intensity: 0.4,
-      fluidity: 0.5,
-      connection: 0.2
+    } else {
+      set({ currentUser: null });
+    }
+  });
+
+  return {
+    // Estado inicial
+    symphonyState: null,
+    currentUser: null,
+    isConnected: false,
+    emotionalVector: defaultEmotionalVector,
+    audioEnabled: true,
+    mousePosition: [0, 0, 0],
+    mouseIntensity: 0.5,
+
+    // Setters básicos
+    setSymphonyState: (state) => set({ symphonyState: state }),
+    setCurrentUser: (user) => set({ currentUser: user }),
+    setConnected: (connected) => set({ isConnected: connected }),
+
+    // Ações de conexão
+    connectToSymphony: () => {
+      socketService.connect();
+      set({ isConnected: true });
     },
-    connectionStrength: 0.3,
-    audioIntensity: 0.5
-  },
-  
-  setSymphonyState: (state) => set({ symphonyState: state }),
-  
-  // Configurações
-  audioEnabled: true,
-  setAudioEnabled: (enabled) => set({ audioEnabled: enabled }),
-  
-  // Controles de mouse
-  mousePosition: [0, 0],
-  setMousePosition: (position) => set({ mousePosition: position }),
-  
-  mouseIntensity: 0,
-  setMouseIntensity: (intensity) => set({ mouseIntensity: intensity })
-}))
+
+    disconnectFromSymphony: () => {
+      socketService.disconnect();
+      set({ 
+        isConnected: false, 
+        symphonyState: null, 
+        currentUser: null 
+      });
+    },
+
+    // Ações de atualização
+    updateEmotionalVector: (emotionalVector) => {
+      const { currentUser } = get();
+      set({ emotionalVector });
+      
+      if (currentUser) {
+        const updatedUser = { ...currentUser, emotionalVector };
+        set({ currentUser: updatedUser });
+        socketService.sendEmotionalUpdate(emotionalVector);
+      }
+    },
+
+    updatePosition: (position) => {
+      const { currentUser } = get();
+      set({ mousePosition: position });
+      
+      if (currentUser) {
+        const updatedUser = { ...currentUser, position };
+        set({ currentUser: updatedUser });
+        socketService.sendPositionUpdate(position);
+      }
+    },
+
+    // Ações para compatibilidade
+    setAudioEnabled: (enabled) => set({ audioEnabled: enabled }),
+    
+    setMousePosition: (position) => {
+      set({ mousePosition: position });
+      get().updatePosition(position);
+    },
+    
+    setMouseIntensity: (intensity) => set({ mouseIntensity: intensity }),
+    
+    updateEmotion: (emotion: string, value: number) => {
+      const { emotionalVector } = get();
+      const updatedVector = {
+        ...emotionalVector,
+        [emotion]: Math.max(0, Math.min(1, value))
+      };
+      get().updateEmotionalVector(updatedVector);
+    },
+
+    // Utilidades
+    getOtherUsers: () => {
+      const { symphonyState, currentUser } = get();
+      if (!symphonyState || !currentUser) return [];
+      return symphonyState.users.filter(user => user.id !== currentUser.id);
+    },
+
+    getConnectionStrength: () => {
+      const { symphonyState } = get();
+      return symphonyState?.connectionStrength || 0;
+    }
+  };
+});

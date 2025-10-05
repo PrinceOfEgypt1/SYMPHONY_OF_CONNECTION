@@ -1,38 +1,61 @@
-import { useRef, useMemo, useEffect } from 'react'
+import React, { useRef, useEffect } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useSymphonyStore } from '../stores/symphonyStore'
+import CollaborativeConstellations from './CollaborativeConstellations'
 
-export const Experience: React.FC = () => {
+/**
+ * Componente principal de experiência 3D
+ * @component
+ * @description Gerencia partículas, interações e renderização 3D com visual melhorado
+ */
+const Experience: React.FC = () => {
   const particlesRef = useRef<THREE.Points>(null)
-  const { mousePosition, emotionalVector } = useSymphonyStore()
-  const { size } = useThree()
+  const ambientLightRef = useRef<THREE.AmbientLight>(null)
+  const pointLightRef = useRef<THREE.PointLight>(null)
+  const { viewport } = useThree()
+  const {
+    connectToSymphony,
+    updatePosition,
+    updateEmotionalVector,
+    setMousePosition,
+    setMouseIntensity
+  } = useSymphonyStore()
 
-  // Sistema de partículas
-  const particleSystem = useMemo(() => {
-    const particleCount = 2000
-    const positions = new Float32Array(particleCount * 3)
-    const colors = new Float32Array(particleCount * 3)
-    const sizes = new Float32Array(particleCount)
+  // Conectar ao symphony quando o componente montar
+  useEffect(() => {
+    connectToSymphony()
+  }, [connectToSymphony])
 
-    for (let i = 0; i < particleCount; i++) {
-      const i3 = i * 3
-      const radius = 4 + Math.random() * 2
+  // Geometria das partículas melhorada
+  const particleGeometry = React.useMemo(() => {
+    const geometry = new THREE.BufferGeometry()
+    const count = 1000 // Mais partículas para efeito mais rico
+    const positions = new Float32Array(count * 3)
+    const colors = new Float32Array(count * 3)
+    const sizes = new Float32Array(count)
+
+    for (let i = 0; i < count * 3; i += 3) {
+      // Posições em uma esfera maior
+      const radius = 8 + Math.random() * 4
       const theta = Math.random() * Math.PI * 2
       const phi = Math.acos(2 * Math.random() - 1)
       
-      positions[i3] = radius * Math.sin(phi) * Math.cos(theta)
-      positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta)
-      positions[i3 + 2] = radius * Math.cos(phi)
-      
-      colors[i3] = 0.5 + 0.5 * Math.sin(theta)
-      colors[i3 + 1] = 0.5 + 0.5 * Math.cos(phi)
-      colors[i3 + 2] = 0.5 + 0.5 * Math.sin(theta + phi)
-      
-      sizes[i] = 0.02 + Math.random() * 0.03
+      positions[i] = radius * Math.sin(phi) * Math.cos(theta)
+      positions[i + 1] = radius * Math.sin(phi) * Math.sin(theta)
+      positions[i + 2] = radius * Math.cos(phi)
+
+      // Cores gradientes
+      const color = new THREE.Color()
+      color.setHSL(Math.random() * 0.2 + 0.5, 0.8, 0.6 + Math.random() * 0.2)
+      colors[i] = color.r
+      colors[i + 1] = color.g
+      colors[i + 2] = color.b
+
+      // Tamanhos variados
+      sizes[i / 3] = Math.random() * 0.1 + 0.05
     }
 
-    const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
@@ -40,58 +63,119 @@ export const Experience: React.FC = () => {
     return geometry
   }, [])
 
-  // Animação das partículas
-  useFrame((state) => {
-    if (particlesRef.current) {
-      const time = state.clock.elapsedTime
+  // Animação de frame para interações
+  useFrame(({ mouse, clock }) => {
+    if (!particlesRef.current) return
+
+    // Atualizar posição baseada no mouse - COORDENADAS 3D CORRETAS
+    const x = (mouse.x * viewport.width) / 2
+    const y = (mouse.y * viewport.height) / 2
+    const z = 0
+
+    // Atualizar store com posição 3D
+    updatePosition([x, y, z])
+    setMousePosition([x, y, z])
+
+    // Calcular intensidade baseada no movimento do mouse
+    const time = clock.getElapsedTime()
+    const intensity = Math.min(1, Math.sqrt(x * x + y * y) / viewport.width)
+    setMouseIntensity(intensity)
+
+    // Atualizar vetor emocional baseado na interação
+    updateEmotionalVector({
+      joy: intensity * 0.8,
+      excitement: intensity,
+      calm: 1 - intensity,
+      intensity: intensity,
+      fluidity: Math.sin(time) * 0.5 + 0.5,
+      connection: intensity * 0.6,
+      curiosity: intensity * 0.7
+    })
+
+    // Animar partículas com movimento mais orgânico
+    const particles = particlesRef.current
+    const positions = particles.geometry.attributes.position.array as Float32Array
+    const colors = particles.geometry.attributes.color.array as Float32Array
+    
+    for (let i = 0; i < positions.length; i += 3) {
+      // Movimento de fluxo suave com noise
+      const particleIndex = i / 3
+      const noise = Math.sin(time * 0.5 + particleIndex * 0.1)
+      const noise2 = Math.cos(time * 0.3 + particleIndex * 0.05)
       
-      particlesRef.current.rotation.x = time * 0.05
-      particlesRef.current.rotation.y = time * 0.03
-      
-      particlesRef.current.rotation.x += (mousePosition[1] * 0.5 - particlesRef.current.rotation.x) * 0.1
-      particlesRef.current.rotation.y += (mousePosition[0] * 0.5 - particlesRef.current.rotation.y) * 0.1
-      
-      const scale = 1 + emotionalVector.intensity * 0.3 + Math.sin(time * 2) * 0.1
-      particlesRef.current.scale.setScalar(scale)
+      positions[i] += noise * 0.005
+      positions[i + 1] += noise2 * 0.005
+      positions[i + 2] += (noise + noise2) * 0.003
+
+      // Pulsação suave de cores
+      const hue = (0.5 + Math.sin(time * 0.2 + particleIndex * 0.01) * 0.1) % 1
+      const color = new THREE.Color().setHSL(hue, 0.8, 0.6)
+      colors[i] = color.r
+      colors[i + 1] = color.g
+      colors[i + 2] = color.b
+    }
+    
+    particles.geometry.attributes.position.needsUpdate = true
+    particles.geometry.attributes.color.needsUpdate = true
+
+    // Animar luzes baseado no movimento
+    if (pointLightRef.current) {
+      pointLightRef.current.position.x = Math.sin(time * 0.5) * 3
+      pointLightRef.current.position.y = Math.cos(time * 0.3) * 2
+      pointLightRef.current.intensity = 1 + intensity * 2
     }
   })
 
-  // Efeito do mouse
-  useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
-      const x = (event.clientX / size.width) * 2 - 1
-      const y = -(event.clientY / size.height) * 2 + 1
-      
-      useSymphonyStore.getState().setMousePosition([x, y])
-      
-      const intensity = Math.sqrt(x * x + y * y) * 2
-      useSymphonyStore.getState().setMouseIntensity(intensity)
-      
-      useSymphonyStore.getState().updateEmotion('intensity', intensity)
-      useSymphonyStore.getState().updateEmotion('excitement', intensity * 0.8)
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    return () => window.removeEventListener('mousemove', handleMouseMove)
-  }, [size])
-
   return (
     <>
+      {/* Iluminação melhorada */}
+      <ambientLight ref={ambientLightRef} intensity={0.3} />
+      <pointLight 
+        ref={pointLightRef} 
+        position={[2, 2, 2]} 
+        intensity={1.5} 
+        color="#8b5cf6"
+        distance={20}
+        decay={2}
+      />
+      <pointLight 
+        position={[-2, -1, 1]} 
+        intensity={0.8} 
+        color="#ec4899"
+        distance={15}
+        decay={2}
+      />
+
+      {/* Partículas principais */}
       <points ref={particlesRef}>
-        <primitive object={particleSystem} />
-        <pointsMaterial
-          size={0.05}
-          sizeAttenuation={true}
+        <primitive object={particleGeometry} />
+        <pointsMaterial 
+          size={0.08}
           vertexColors={true}
           transparent
           opacity={0.8}
+          sizeAttenuation={true}
           blending={THREE.AdditiveBlending}
         />
       </points>
-      
-      <ambientLight intensity={0.3} />
-      <pointLight position={[10, 10, 10]} intensity={1.5} color="#ff6b6b" />
-      <pointLight position={[-10, -10, 5]} intensity={1} color="#4ecdc4" />
+
+      {/* Efeito de glow com partículas menores */}
+      <points>
+        <primitive object={particleGeometry.clone()} />
+        <pointsMaterial 
+          size={0.03}
+          vertexColors={true}
+          transparent
+          opacity={0.4}
+          sizeAttenuation={true}
+          blending={THREE.AdditiveBlending}
+        />
+      </points>
+
+      {/* Sistema de constelações colaborativas */}
+      <CollaborativeConstellations />
     </>
   )
 }
+
+export default Experience

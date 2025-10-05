@@ -11,9 +11,11 @@
     "test": "jest"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.15.0",
     "framer-motion": "^10.16.0",
+    "leva": "^0.10.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "socket.io-client": "^4.7.0",

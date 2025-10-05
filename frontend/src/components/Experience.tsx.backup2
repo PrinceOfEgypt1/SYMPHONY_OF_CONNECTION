@@ -1,0 +1,95 @@
+import React, { useRef, useEffect } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import * as THREE from 'three'
+import { useSymphonyStore } from '../stores/symphonyStore'
+import CollaborativeConstellations from './CollaborativeConstellations'
+
+const Experience: React.FC = () => {
+  const particlesRef = useRef<THREE.Points>(null)
+  const { viewport } = useThree()
+  const { 
+    connectToSymphony, 
+    updatePosition, 
+    updateEmotionalVector, 
+    setMousePosition,
+    setMouseIntensity
+  } = useSymphonyStore()
+
+  // Conectar ao socket quando o componente montar
+  useEffect(() => {
+    connectToSymphony()
+  }, [connectToSymphony])
+
+  useFrame(({ mouse }) => {
+    if (!particlesRef.current) return
+
+    // Atualizar posição baseada no mouse
+    const x = (mouse.x * viewport.width) / 2
+    const y = (mouse.y * viewport.height) / 2
+    const z = 0
+
+    updatePosition([x, y, z])
+    setMousePosition([x, y, z])
+
+    // Calcular intensidade baseada no movimento do mouse
+    const intensity = Math.sqrt(mouse.x ** 2 + mouse.y ** 2)
+    setMouseIntensity(intensity)
+
+    // Atualizar vetor emocional baseado no movimento
+    const emotionalVector = {
+      joy: (mouse.x + 1) / 2,
+      excitement: intensity,
+      calm: 1 - intensity,
+      curiosity: (Math.sin(Date.now() * 0.001) + 1) / 2,
+      intensity: intensity,
+      fluidity: 0.5 + mouse.y * 0.5,
+      connection: 0.5
+    }
+
+    updateEmotionalVector(emotionalVector)
+
+    // Animar partículas
+    if (particlesRef.current) {
+      particlesRef.current.rotation.x += 0.001
+      particlesRef.current.rotation.y += 0.002
+    }
+  })
+
+  // Gerar geometria das partículas
+  const particlesGeometry = new THREE.BufferGeometry()
+  const particlesCount = 500
+  const posArray = new Float32Array(particlesCount * 3)
+
+  for (let i = 0; i < particlesCount * 3; i++) {
+    posArray[i] = (Math.random() - 0.5) * 10
+  }
+
+  particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3))
+
+  return (
+    <>
+      <points ref={particlesRef}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            array={posArray}
+            count={particlesCount}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <pointsMaterial
+          size={0.05}
+          color="#ffffff"
+          transparent
+          opacity={0.8}
+          sizeAttenuation={true}
+        />
+      </points>
+      
+      {/* Componente colaborativo */}
+      <CollaborativeConstellations />
+    </>
+  )
+}
+
+export default Experience

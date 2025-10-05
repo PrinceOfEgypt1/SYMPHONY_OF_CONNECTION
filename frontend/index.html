@@ -1,21 +1,46 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Symphony of Connection</title>
+    <meta name="description" content="Symphony of Connection - Experiência musical generativa colaborativa em tempo real">
+    <meta name="keywords" content="música, generativa, colaborativa, three.js, react, tempo real">
+    <meta name="theme-color" content="#8b5cf6">
+    
+    <!-- Preload para performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <title>🎵 Symphony of Connection - Experiência Musical Generativa</title>
+    
     <style>
+      /* Loading crítico */
       body {
         margin: 0;
-        padding: 0;
+        background: #0f0f23;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         overflow: hidden;
-        background: #000;
       }
+      
+      /* Fallback font enquanto Inter carrega */
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Analytics placeholder -->
+    <script>
+      // Analytics para métricas de uso
+      window.addEventListener('load', function() {
+        console.log('🎵 Symphony of Connection carregado com sucesso!');
+        
+        // Coletar métricas básicas de performance
+        const loadTime = performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart;
+        console.log(`Tempo de carregamento: ${loadTime}ms`);
+      });
+    </script>
   </body>
 </html>

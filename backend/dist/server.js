@@ -26,6 +26,17 @@ const symphonyState = {
     },
     connectionStrength: 0.3
 };
+// Sistema de limpeza de usuários inativos
+setInterval(() => {
+    const now = Date.now();
+    const inactiveUsers = symphonyState.users.filter(user => now - user.lastSeen > 30000 // 30 segundos
+    );
+    inactiveUsers.forEach(user => {
+        symphonyState.users = symphonyState.users.filter(u => u.id !== user.id);
+        console.log(`🧹 Removido usuário inativo: ${user.id}`);
+        io.emit('user-left', { userId: user.id });
+    });
+}, 15000);
 io.on('connection', (socket) => {
     console.log('🎵 Usuário conectado:', socket.id);
     // Adicionar usuário ao estado
@@ -34,7 +45,8 @@ io.on('connection', (socket) => {
         emotionalVector: { ...symphonyState.emotionalField },
         position: [0, 0, 0],
         color: `hsl(${Math.random() * 360}, 70%, 60%)`,
-        connected: true
+        connected: true,
+        lastSeen: Date.now()
     };
     symphonyState.users.push(newUser);
     // Enviar estado inicial para o usuário
@@ -52,6 +64,7 @@ io.on('connection', (socket) => {
         const userIndex = symphonyState.users.findIndex(u => u.id === socket.id);
         if (userIndex !== -1) {
             symphonyState.users[userIndex].emotionalVector = data.emotionalVector;
+            symphonyState.users[userIndex].lastSeen = Date.now();
             // Atualizar campo emocional geral (média simples)
             const usersArray = symphonyState.users;
             symphonyState.emotionalField = {
@@ -82,6 +95,27 @@ io.on('connection', (socket) => {
             });
         }
     });
+    // Lidar com atualizações de posição
+    socket.on('position-update', (data) => {
+        const userIndex = symphonyState.users.findIndex(u => u.id === socket.id);
+        if (userIndex !== -1) {
+            symphonyState.users[userIndex].position = data.position;
+            symphonyState.users[userIndex].lastSeen = Date.now();
+            // Broadcast para outros usuários
+            socket.broadcast.emit('user-position-update', {
+                userId: socket.id,
+                position: data.position
+            });
+        }
+    });
+    // Health check
+    socket.on('ping', () => {
+        const userIndex = symphonyState.users.findIndex(u => u.id === socket.id);
+        if (userIndex !== -1) {
+            symphonyState.users[userIndex].lastSeen = Date.now();
+        }
+        socket.emit('pong', { timestamp: Date.now() });
+    });
     // Lidar com desconexão
     socket.on('disconnect', () => {
         console.log('👋 Usuário desconectado:', socket.id);
@@ -90,8 +124,20 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('user-left', { userId: socket.id });
     });
 });
+// Rota de health check
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        service: 'Symphony of Connection Backend',
+        timestamp: new Date().toISOString(),
+        activeUsers: symphonyState.users.length,
+        emotionalField: symphonyState.emotionalField,
+        connectionStrength: symphonyState.connectionStrength
+    });
+});
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`🎵 Symphony Server rodando na porta ${PORT}`);
     console.log(`🌐 Acesse: http://localhost:${PORT}`);
+    console.log(`🔌 WebSockets habilitados para colaboração em tempo real`);
 });
