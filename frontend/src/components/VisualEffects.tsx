@@ -1,5 +1,5 @@
 import React, { useRef } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useSymphonyStore } from '../stores/symphonyStore'
 
@@ -10,7 +10,6 @@ import { useSymphonyStore } from '../stores/symphonyStore'
 const VisualEffects: React.FC = () => {
   const glowRef = useRef<THREE.Mesh>(null)
   const { emotionalVector } = useSymphonyStore()
-  const { scene } = useThree()
 
   useFrame(({ clock }) => {
     if (!glowRef.current || !emotionalVector) return
@@ -22,10 +21,13 @@ const VisualEffects: React.FC = () => {
     const pulse = Math.sin(time * 2) * 0.5 + 0.5
     glowRef.current.scale.setScalar(1 + pulse * 0.1 * excitement)
     
-    // Cor do glow baseada nas emoções
+    // Cor do glow baseada nas emoções com type assertion
     const hue = (joy * 0.3 + calm * 0.1 + time * 0.05) % 1
     const color = new THREE.Color().setHSL(hue, 0.8, 0.6)
-    glowRef.current.material.color = color
+    
+    // Type assertion para MeshBasicMaterial
+    const material = glowRef.current.material as THREE.MeshBasicMaterial
+    material.color = color
   })
 
   return (

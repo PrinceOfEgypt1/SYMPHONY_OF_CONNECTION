@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { useSymphonyStore } from '../stores/symphonyStore'
 import CollaborativeConstellations from './CollaborativeConstellations'
 import EnhancedParticles from './EnhancedParticles'
+import VisualEffects from './VisualEffects'
 
 /**
  * Componente principal de experiência 3D
@@ -122,6 +123,9 @@ const Experience: React.FC = () => {
           blending={THREE.AdditiveBlending}
         />
       </points>
+
+      {/* Efeitos visuais extras */}
+      <VisualEffects />
 
       {/* Sistema de constelações colaborativas */}
       <CollaborativeConstellations />
