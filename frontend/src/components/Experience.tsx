@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useSymphonyStore } from '../stores/symphonyStore'
 import CollaborativeConstellations from './CollaborativeConstellations'
+import EnhancedParticles from './EnhancedParticles'
 
 /**
  * Componente principal de experiência 3D
@@ -13,6 +14,7 @@ const Experience: React.FC = () => {
   const particlesRef = useRef<THREE.Points>(null)
   const ambientLightRef = useRef<THREE.AmbientLight>(null)
   const pointLightRef = useRef<THREE.PointLight>(null)
+  const directionalLightRef = useRef<THREE.DirectionalLight>(null)
   const { viewport } = useThree()
   const {
     connectToSymphony,
@@ -26,42 +28,6 @@ const Experience: React.FC = () => {
   useEffect(() => {
     connectToSymphony()
   }, [connectToSymphony])
-
-  // Geometria das partículas melhorada
-  const particleGeometry = React.useMemo(() => {
-    const geometry = new THREE.BufferGeometry()
-    const count = 1000 // Mais partículas para efeito mais rico
-    const positions = new Float32Array(count * 3)
-    const colors = new Float32Array(count * 3)
-    const sizes = new Float32Array(count)
-
-    for (let i = 0; i < count * 3; i += 3) {
-      // Posições em uma esfera maior
-      const radius = 8 + Math.random() * 4
-      const theta = Math.random() * Math.PI * 2
-      const phi = Math.acos(2 * Math.random() - 1)
-      
-      positions[i] = radius * Math.sin(phi) * Math.cos(theta)
-      positions[i + 1] = radius * Math.sin(phi) * Math.sin(theta)
-      positions[i + 2] = radius * Math.cos(phi)
-
-      // Cores gradientes
-      const color = new THREE.Color()
-      color.setHSL(Math.random() * 0.2 + 0.5, 0.8, 0.6 + Math.random() * 0.2)
-      colors[i] = color.r
-      colors[i + 1] = color.g
-      colors[i + 2] = color.b
-
-      // Tamanhos variados
-      sizes[i / 3] = Math.random() * 0.1 + 0.05
-    }
-
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
-    
-    return geometry
-  }, [])
 
   // Animação de frame para interações
   useFrame(({ mouse, clock }) => {
@@ -92,81 +58,66 @@ const Experience: React.FC = () => {
       curiosity: intensity * 0.7
     })
 
-    // Animar partículas com movimento mais orgânico
-    const particles = particlesRef.current
-    const positions = particles.geometry.attributes.position.array as Float32Array
-    const colors = particles.geometry.attributes.color.array as Float32Array
-    
-    for (let i = 0; i < positions.length; i += 3) {
-      // Movimento de fluxo suave com noise
-      const particleIndex = i / 3
-      const noise = Math.sin(time * 0.5 + particleIndex * 0.1)
-      const noise2 = Math.cos(time * 0.3 + particleIndex * 0.05)
-      
-      positions[i] += noise * 0.005
-      positions[i + 1] += noise2 * 0.005
-      positions[i + 2] += (noise + noise2) * 0.003
-
-      // Pulsação suave de cores
-      const hue = (0.5 + Math.sin(time * 0.2 + particleIndex * 0.01) * 0.1) % 1
-      const color = new THREE.Color().setHSL(hue, 0.8, 0.6)
-      colors[i] = color.r
-      colors[i + 1] = color.g
-      colors[i + 2] = color.b
-    }
-    
-    particles.geometry.attributes.position.needsUpdate = true
-    particles.geometry.attributes.color.needsUpdate = true
-
     // Animar luzes baseado no movimento
     if (pointLightRef.current) {
       pointLightRef.current.position.x = Math.sin(time * 0.5) * 3
       pointLightRef.current.position.y = Math.cos(time * 0.3) * 2
       pointLightRef.current.intensity = 1 + intensity * 2
+      
+      // Cor dinâmica baseada na intensidade
+      const hue = (time * 0.1) % 1
+      pointLightRef.current.color.setHSL(hue, 0.8, 0.6)
+    }
+
+    if (directionalLightRef.current) {
+      directionalLightRef.current.intensity = 0.5 + intensity * 0.5
     }
   })
 
   return (
     <>
       {/* Iluminação melhorada */}
-      <ambientLight ref={ambientLightRef} intensity={0.3} />
+      <ambientLight ref={ambientLightRef} intensity={0.4} color={0x4444ff} />
       <pointLight 
         ref={pointLightRef} 
         position={[2, 2, 2]} 
-        intensity={1.5} 
-        color="#8b5cf6"
+        intensity={1.5}
         distance={20}
         decay={2}
       />
       <pointLight 
         position={[-2, -1, 1]} 
         intensity={0.8} 
-        color="#ec4899"
+        color={0xff44aa}
         distance={15}
         decay={2}
       />
+      <directionalLight
+        ref={directionalLightRef}
+        position={[5, 5, 5]}
+        intensity={0.5}
+        color={0xffffff}
+        castShadow
+      />
 
-      {/* Partículas principais */}
-      <points ref={particlesRef}>
-        <primitive object={particleGeometry} />
-        <pointsMaterial 
-          size={0.08}
-          vertexColors={true}
-          transparent
-          opacity={0.8}
-          sizeAttenuation={true}
-          blending={THREE.AdditiveBlending}
-        />
-      </points>
+      {/* Partículas avançadas com cores e formações */}
+      <EnhancedParticles />
 
-      {/* Efeito de glow com partículas menores */}
+      {/* Efeito de partículas secundárias para profundidade */}
       <points>
-        <primitive object={particleGeometry.clone()} />
-        <pointsMaterial 
-          size={0.03}
-          vertexColors={true}
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={200}
+            array={new Float32Array(200 * 3).map(() => (Math.random() - 0.5) * 20)}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <pointsMaterial
+          size={0.02}
+          color={0x8888ff}
           transparent
-          opacity={0.4}
+          opacity={0.3}
           sizeAttenuation={true}
           blending={THREE.AdditiveBlending}
         />

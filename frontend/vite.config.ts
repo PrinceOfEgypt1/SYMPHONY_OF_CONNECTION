@@ -8,6 +8,14 @@ export default defineConfig({
     host: true
   },
   optimizeDeps: {
-    include: ['three', '@react-three/fiber']
+    include: ['three', '@react-three/fiber'],
+    exclude: ['standardized-audio-context']
+  },
+  build: {
+    rollupOptions: {
+      external: [
+        './factories/get-backup-offline-audio-context'
+      ]
+    }
   }
 })
